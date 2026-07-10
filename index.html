@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Мой Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <h1>Привет из Mini App!</h1>
+    <p id="user-info">Загрузка...</p>
+    <button onclick="sendData()">Отправить данные боту</button>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.ready(); // сообщаем Telegram, что страница готова
+
+        // достаём имя пользователя, который открыл приложение
+        let user = tg.initDataUnsafe.user;
+        document.getElementById("user-info").innerText = "Привет, " + user.first_name + "!";
+
+        function sendData() {
+            tg.sendData("Привет от кнопки!"); // отправляет данные обратно боту
+        }
+    </script>
+</body>
+</html>
