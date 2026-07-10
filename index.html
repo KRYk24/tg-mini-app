@@ -24,7 +24,12 @@
     <h1>Привет из Mini App!</h1>
     <p id="user-info">Загрузка...</p>
     <input type="text" id="my-input" placeholder="Введи что-нибудь">
-    <button onclick="sendData()">Отправить данные боту</button>
+    tg.MainButton.setText("Отправить данные боту");
+    tg.MainButton.show();
+    tg.MainButton.onClick(function() {
+            let value = document.getElementById("my-input").value;
+            tg.sendData(value);
+    });
 
     <script>
         let tg = window.Telegram.WebApp;
