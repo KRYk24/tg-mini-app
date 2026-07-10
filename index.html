@@ -2,7 +2,10 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    
+    <!-- 1. Viewport meta-тег — сразу после charset, до title -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <title>Мой Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
@@ -10,6 +13,8 @@
         body {
             background-color: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
+            
+            /* 3. Flexbox для body */
             display: flex;
             flex-direction: column;
             padding: 16px;
@@ -25,6 +30,7 @@
             border-radius: 8px;
         }
 
+        /* 2. Стили для input */
         input {
             width: 100%;
             box-sizing: border-box;
@@ -32,6 +38,7 @@
             font-size: 16px;
         }
 
+        /* 4. Media query — в самом конце style, после всех обычных правил */
         @media (max-width: 400px) {
             h1 {
                 font-size: 20px;
@@ -48,13 +55,8 @@
         let tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
+        console.log("Цвета темы:", tg.themeParams);
         
-        // ВРЕМЕННАЯ ДИАГНОСТИКА — выводим сырые данные прямо на страницу
-        document.getElementById("user-info").innerText = 
-            "initDataUnsafe: " + JSON.stringify(tg.initDataUnsafe) + 
-            " | initData length: " + tg.initData.length;
-
-        /* Обычный код, временно закомментирован:
         let user = tg.initDataUnsafe.user;
 
         if (user) {
@@ -62,7 +64,6 @@
         } else {
             document.getElementById("user-info").innerText = "Не в Telegram — данных о пользователе нет";
         }
-        */
 
         tg.MainButton.setText("Отправить данные боту");
         tg.MainButton.show();
