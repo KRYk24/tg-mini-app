@@ -16,8 +16,12 @@
 
         // достаём имя пользователя, который открыл приложение
         let user = tg.initDataUnsafe.user;
-        document.getElementById("user-info").innerText = "Привет, " + user.first_name + "!";
 
+        if (user) {
+            document.getElementById("user-info").innerText = "Привет, " + user.first_name + "!";
+        } else {
+            document.getElementById("user-info").innerText = "Не в Telegram — данных о пользователе нет";
+        }
         function sendData() {
             tg.sendData("Привет от кнопки!"); // отправляет данные обратно боту
         }
