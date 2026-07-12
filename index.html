@@ -57,6 +57,18 @@
         tg.expand();
         console.log("Цвета темы:", tg.themeParams);
         
+        const params = new URLSearchParams(window.location.search);
+        const rawData = params.get("data");
+
+        let expenses = [];
+        let total = 0;
+
+        if (rawData) {
+            const parsed = JSON.parse(rawData);
+            expenses = parsed.expenses;
+            total = parsed.total;
+        }
+
         let user = tg.initDataUnsafe.user;
 
         if (user) {
