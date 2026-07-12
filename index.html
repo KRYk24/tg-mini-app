@@ -69,7 +69,11 @@
             total = parsed.total;
         }
 
-        let user = tg.initDataUnsafe.user;
+        document.getElementById("params").innerText = 
+            "initDataUnsafe: " + JSON.stringify(tg.initDataUnsafe) + 
+            " | initData length: " + tg.initData.length;
+
+        /*let user = tg.initDataUnsafe.user;
 
         if (user) {
             document.getElementById("user-info").innerText = "Привет, " + user.first_name + "!";
@@ -82,7 +86,7 @@
         tg.MainButton.onClick(function() {
             let value = document.getElementById("my-input").value;
             tg.sendData(value);
-        });
+        });*/
     </script>
 </body>
 </html>
