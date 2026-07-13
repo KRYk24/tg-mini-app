@@ -141,6 +141,28 @@
   .piece.white { color: var(--white-piece); filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
   .piece.black { color: var(--black-piece); filter: drop-shadow(0 0 5px var(--black-piece-glow)); }
 
+  .square.last-move::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--accent-teal-glow);
+    opacity: 0.18;
+    pointer-events: none;
+  }
+
+  .moves-panel {
+    width: 100%; max-height: 92px; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
+    font-size: 12.5px; color: var(--muted); line-height: 1.7;
+  }
+  .moves-panel .move-pair { color: var(--text); margin-right: 10px; }
+  .moves-panel .move-num { color: var(--muted); margin-right: 4px; }
+
+  button.action.danger {
+    background: transparent; border-color: var(--danger); color: var(--danger);
+  }
+  button.action.danger:active { background: rgba(255,107,107,0.1); }
+
   .result-banner {
     width: 100%; background: var(--surface); border: 1px solid var(--line);
     border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 14px;
@@ -200,6 +222,8 @@
     <div class="board-wrap">
       <div class="board" id="board"></div>
     </div>
+    <div class="moves-panel" id="movesPanel">Ходов ещё нет</div>
+    <button class="action danger" id="resignBtn">Сдаться</button>
   </div>
 
   <!-- ===== RESULT SCREEN ===== -->
@@ -375,6 +399,8 @@
     }
     if (row.status === 'finished') {
       chess.load(row.fen);
+      renderMovesPanel(row);
+      renderLastMoveHighlight(row);
       showResult(row);
       return;
     }
@@ -382,6 +408,8 @@
       chess.load(row.fen);
       selectedSquare = null; legalTargets = [];
       renderBoard();
+      renderLastMoveHighlight(row);
+      renderMovesPanel(row);
       updateStatusBar();
     }
   }
@@ -394,6 +422,8 @@
     el('blackLabel').textContent = '♚ ' + (row.black_name || '—') + (myColor === 'black' ? ' (вы)' : '');
     buildBoardDom();
     renderBoard();
+    renderLastMoveHighlight(row);
+    renderMovesPanel(row);
     updateStatusBar();
     showScreen('gameScreen');
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -450,6 +480,33 @@
     });
   }
 
+  function renderMovesPanel(row) {
+    const panel = el('movesPanel');
+    const moves = row.moves || [];
+    if (!moves.length) { panel.textContent = 'Ходов ещё нет'; return; }
+    let html = '';
+    for (let i = 0; i < moves.length; i += 2) {
+      const num = i / 2 + 1;
+      const white = moves[i] || '';
+      const black = moves[i + 1] || '';
+      html += `<span class="move-pair"><span class="move-num">${num}.</span>${white} ${black}</span>`;
+    }
+    panel.innerHTML = html;
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  function renderLastMoveHighlight(row) {
+    document.querySelectorAll('#board .square').forEach(c => c.classList.remove('last-move'));
+    if (row.last_from) {
+      const fromCell = document.querySelector(`#board .square[data-square="${row.last_from}"]`);
+      if (fromCell) fromCell.classList.add('last-move');
+    }
+    if (row.last_to) {
+      const toCell = document.querySelector(`#board .square[data-square="${row.last_to}"]`);
+      if (toCell) toCell.classList.add('last-move');
+    }
+  }
+
   async function onSquareClick(square) {
     if (!currentRow || currentRow.status !== 'active') return;
     const turnColor = chess.turn() === 'w' ? 'white' : 'black';
@@ -459,7 +516,7 @@
     if (selectedSquare && target) {
       const move = chess.move({ from: selectedSquare, to: square, promotion: 'q' });
       selectedSquare = null; legalTargets = [];
-      if (move) { renderBoard(); await pushMove(); }
+      if (move) { renderBoard(); await pushMove(move); }
       return;
     }
 
@@ -474,36 +531,82 @@
     }
   }
 
-  async function pushMove() {
-    const update = { fen: chess.fen(), turn: chess.turn() === 'w' ? 'white' : 'black' };
+  async function pushMove(move) {
+    const update = {
+      fen: chess.fen(),
+      turn: chess.turn() === 'w' ? 'white' : 'black',
+      moves: (currentRow.moves || []).concat(move.san),
+      last_from: move.from,
+      last_to: move.to
+    };
 
     if (chess.game_over()) {
       update.status = 'finished';
-      update.result = chess.in_checkmate() ? (chess.turn() === 'w' ? 'black_win' : 'white_win') : 'draw';
+      if (chess.in_checkmate()) {
+        update.result = chess.turn() === 'w' ? 'black_win' : 'white_win';
+        update.end_reason = 'checkmate';
+      } else {
+        update.result = 'draw';
+        update.end_reason = chess.in_stalemate() ? 'stalemate'
+          : chess.in_threefold_repetition() ? 'repetition'
+          : chess.insufficient_material() ? 'insufficient_material'
+          : 'fifty_move_rule';
+      }
     }
 
     const { data, error } = await sb.from('games').update(update).eq('id', gameId).select().single();
     if (error) { showToast('Ошибка синхронизации хода'); console.error(error); return; }
     currentRow = data;
+    renderMovesPanel(data);
+    renderLastMoveHighlight(data);
     if (data.status === 'finished') { showResult(data); } else { updateStatusBar(); }
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
   }
+
+  const DRAW_SUB = {
+    stalemate: 'Пат — ни у кого нет ходов',
+    repetition: 'Ничья повторением позиции',
+    insufficient_material: 'Ничья — недостаточно материала для мата',
+    fifty_move_rule: 'Ничья по правилу 50 ходов'
+  };
 
   function showResult(row) {
     let headline, sub;
     if (row.result === 'draw') {
       headline = 'Ничья';
-      sub = chess.in_stalemate() ? 'Пат — ни у кого нет ходов' : 'Партия завершилась вничью';
+      sub = DRAW_SUB[row.end_reason] || 'Партия завершилась вничью';
     } else {
       const iWon = row.result === (myColor === 'white' ? 'white_win' : 'black_win');
       headline = iWon ? 'Вы победили! 🎉' : 'Соперник победил';
-      sub = 'Мат на доске';
+      sub = row.end_reason === 'resignation' ? (iWon ? 'Соперник сдался' : 'Вы сдались') : 'Мат на доске';
       if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(iWon ? 'success' : 'error');
     }
     el('resultHeadline').textContent = headline;
     el('resultSub').textContent = sub;
     showScreen('resultScreen');
   }
+
+  function confirmAction(message, cb) {
+    if (tg && tg.showConfirm) tg.showConfirm(message, cb);
+    else cb(window.confirm(message));
+  }
+
+  async function resignGame() {
+    const result = myColor === 'white' ? 'black_win' : 'white_win';
+    const { data, error } = await sb.from('games')
+      .update({ status: 'finished', result, end_reason: 'resignation' })
+      .eq('id', gameId).select().single();
+    if (error) { showToast('Не удалось сдаться, попробуйте ещё раз'); return; }
+    currentRow = data;
+    showResult(data);
+  }
+
+  el('resignBtn').addEventListener('click', () => {
+    if (!currentRow || currentRow.status !== 'active') return;
+    confirmAction('Сдаться? Партия будет засчитана как поражение.', (ok) => {
+      if (ok) resignGame();
+    });
+  });
 
   el('newGameAfterBtn').addEventListener('click', () => {
     if (realtimeChannel) sb.removeChannel(realtimeChannel);
