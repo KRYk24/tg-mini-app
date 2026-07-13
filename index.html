@@ -134,6 +134,8 @@
   .piece {
     font-size: 30px; line-height: 1; pointer-events: none;
     transition: transform 0.15s ease;
+    font-variant-emoji: text;
+    -webkit-font-feature-settings: "liga" off;
   }
   .board.flipped .piece { transform: rotate(180deg); }
   .piece.white { color: var(--white-piece); filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
@@ -234,7 +236,12 @@
     me.photo = u.photo_url || null;
   }
 
-  const PIECE_GLYPHS = { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' };
+  // \uFE0E (VS15) принудительно просит текстовый рендеринг символа вместо
+  // цветного emoji-варианта — на iOS 16+ без этого фигуры игнорируют CSS-цвет
+  const PIECE_GLYPHS = {
+    p: '♟\uFE0E', r: '♜\uFE0E', n: '♞\uFE0E',
+    b: '♝\uFE0E', q: '♛\uFE0E', k: '♚\uFE0E'
+  };
 
   let chess = new Chess();
   let gameId = null;
