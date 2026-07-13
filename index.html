@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>Крестики-нолики</title>
+<title>Шахматы</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,493 +18,504 @@
     --line: #262B38;
     --text: #E7E9EE;
     --muted: #8B93A7;
-    --x-color: #7C5CFF;
-    --x-glow: rgba(124, 92, 255, 0.45);
-    --o-color: #22D3B8;
-    --o-glow: rgba(34, 211, 184, 0.45);
+    --white-piece: #ECEDF2;
+    --black-piece: #7C5CFF;
+    --black-piece-glow: rgba(124, 92, 255, 0.5);
+    --accent-teal: #22D3B8;
+    --accent-teal-glow: rgba(34, 211, 184, 0.5);
     --danger: #FF6B6B;
+    --sq-dark: #14171F;
+    --sq-light: #1E222E;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
     font-family: 'Inter', -apple-system, sans-serif;
-    overscroll-behavior: none;
-    user-select: none;
+    overscroll-behavior: none; user-select: none;
   }
 
   body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    padding: 24px 20px 32px;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 20px 16px 28px;
   }
 
-  .header {
-    width: 100%;
-    max-width: 400px;
-    text-align: center;
-    margin-bottom: 18px;
-  }
+  .screen { width: 100%; max-width: 400px; display: none; flex-direction: column; align-items: center; }
+  .screen.visible { display: flex; }
 
   h1 {
     font-family: 'Space Grotesk', sans-serif;
-    font-weight: 700;
-    font-size: 22px;
-    letter-spacing: -0.02em;
-    margin: 0 0 4px;
+    font-weight: 700; font-size: 21px; letter-spacing: -0.02em;
+    margin: 0 0 4px; text-align: center;
+  }
+  h1 .w { color: var(--white-piece); }
+  h1 .b { color: var(--black-piece); }
+
+  .subtitle { font-size: 13px; color: var(--muted); margin: 0 0 20px; text-align: center; }
+
+  .profile-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px 14px; width: 100%; margin-bottom: 16px;
   }
 
-  h1 .x { color: var(--x-color); }
-  h1 .o { color: var(--o-color); }
-
-  .subtitle {
-    font-size: 13px;
-    color: var(--muted);
-    margin: 0;
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--black-piece), var(--accent-teal));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px;
+    color: #fff; flex-shrink: 0; overflow: hidden;
   }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-  .status-bar {
-    width: 100%;
-    max-width: 400px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    font-family: 'Space Grotesk', sans-serif;
-  }
-
-  .score {
-    display: flex;
-    gap: 18px;
-    font-size: 14px;
-  }
-
-  .score-item { display: flex; align-items: center; gap: 6px; }
-
-  .score-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-  }
-  .score-dot.x { background: var(--x-color); }
-  .score-dot.o { background: var(--o-color); }
-  .score-dot.d { background: var(--muted); }
-
-  .status-text {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
-    transition: color 0.25s ease;
-    min-height: 18px;
-  }
-
-  .board-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 360px;
-    aspect-ratio: 1;
-  }
-
-  .board {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    gap: 10px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 10px;
-  }
-
-  .cell {
-    background: var(--surface-2);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    position: relative;
-    transition: background 0.15s ease, transform 0.1s ease;
-  }
-
-  .cell:active { transform: scale(0.96); }
-  .cell.disabled { cursor: default; }
-  .cell.hint { background: #202535; }
-
-  .cell svg {
-    width: 52%;
-    height: 52%;
-    overflow: visible;
-  }
-
-  .mark-path {
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 9;
-    stroke-dasharray: 140;
-    stroke-dashoffset: 140;
-    animation: draw 0.28s ease forwards;
-  }
-
-  .mark-x { stroke: var(--x-color); filter: drop-shadow(0 0 6px var(--x-glow)); }
-  .mark-o { stroke: var(--o-color); filter: drop-shadow(0 0 6px var(--o-glow)); }
-
-  @keyframes draw {
-    to { stroke-dashoffset: 0; }
-  }
-
-  .win-line {
-    position: absolute;
-    inset: 10px;
-    pointer-events: none;
-    overflow: visible;
-  }
-
-  .win-line path {
-    fill: none;
-    stroke-linecap: round;
-    stroke-width: 7;
-    stroke-dasharray: 400;
-    stroke-dashoffset: 400;
-    animation: drawline 0.4s ease forwards;
-  }
-
-  @keyframes drawline {
-    to { stroke-dashoffset: 0; }
-  }
-
-  .controls {
-    width: 100%;
-    max-width: 360px;
-    margin-top: 22px;
-    display: flex;
-    gap: 10px;
-  }
+  .profile-name { font-weight: 600; font-size: 14px; }
+  .profile-label { font-size: 12px; color: var(--muted); }
 
   button.action {
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    font-size: 14px;
-    padding: 13px;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    width: 100%;
+    background: var(--surface); border: 1px solid var(--line);
+    color: var(--text); font-family: 'Inter', sans-serif;
+    font-weight: 600; font-size: 14px; padding: 14px;
+    border-radius: 12px; cursor: pointer; margin-bottom: 10px;
+    transition: background 0.15s ease;
   }
-
   button.action:active { background: var(--surface-2); }
+  button.action.primary { background: var(--black-piece); border-color: var(--black-piece); color: #fff; }
+  button.action.teal { background: var(--accent-teal); border-color: var(--accent-teal); color: #05201B; }
 
-  button.action.primary {
-    background: var(--x-color);
-    border-color: var(--x-color);
-    color: #fff;
+  .invite-box {
+    width: 100%; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px; margin-bottom: 16px; text-align: center;
   }
+  .invite-box .spinner-text { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .pulse-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent-teal);
+    margin: 0 auto 12px; animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:.3; transform:scale(.8);} 50%{opacity:1; transform:scale(1.15);} }
+
+  .status-bar {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 14px;
+  }
+  .status-players { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+  .status-players b { color: var(--text); }
+  .status-text {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px;
+    color: var(--accent-teal); text-align: right;
+  }
+
+  .board-wrap { width: 100%; max-width: 360px; aspect-ratio: 1; margin-bottom: 18px; }
+  .board {
+    width: 100%; height: 100%; display: grid;
+    grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+    border-radius: 16px; overflow: hidden; border: 1px solid var(--line);
+    transition: transform 0.3s ease;
+  }
+  .board.flipped { transform: rotate(180deg); }
+
+  .square { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .square.dark { background: var(--sq-dark); }
+  .square.light { background: var(--sq-light); }
+  .square.selected { box-shadow: inset 0 0 0 3px var(--accent-teal); }
+
+  .square .dot {
+    width: 22%; height: 22%; border-radius: 50%; background: var(--accent-teal);
+    opacity: 0.6; pointer-events: none;
+  }
+  .square .ring {
+    position: absolute; inset: 8%; border-radius: 50%;
+    border: 3px solid var(--accent-teal); opacity: 0.7; pointer-events: none;
+  }
+
+  .piece {
+    font-size: 30px; line-height: 1; pointer-events: none;
+    transition: transform 0.15s ease;
+  }
+  .board.flipped .piece { transform: rotate(180deg); }
+  .piece.white { color: var(--white-piece); filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+  .piece.black { color: var(--black-piece); filter: drop-shadow(0 0 5px var(--black-piece-glow)); }
+
+  .result-banner {
+    width: 100%; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 14px;
+  }
+  .result-banner .headline {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; margin-bottom: 4px;
+  }
+  .result-banner .sub { font-size: 13px; color: var(--muted); }
 
   .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    color: var(--text);
-    padding: 10px 18px;
-    border-radius: 12px;
-    font-size: 13px;
-    opacity: 0;
-    transition: opacity 0.25s ease, transform 0.25s ease;
-    pointer-events: none;
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface); border: 1px solid var(--line); color: var(--text);
+    padding: 10px 18px; border-radius: 12px; font-size: 13px; opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none; z-index: 10;
+    max-width: 320px; text-align: center;
   }
-
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
 
-  <div class="header">
-    <h1><span class="x">Крестики</span> &amp; <span class="o">нолики</span></h1>
-    <p class="subtitle">Один игрок · соперник играет безошибочно</p>
-  </div>
-
-  <div class="status-bar">
-    <div class="score">
-      <div class="score-item"><span class="score-dot x"></span><span id="scoreX">0</span></div>
-      <div class="score-item"><span class="score-dot o"></span><span id="scoreO">0</span></div>
-      <div class="score-item"><span class="score-dot d"></span><span id="scoreD">0</span></div>
+  <!-- ===== HOME SCREEN ===== -->
+  <div class="screen visible" id="homeScreen">
+    <h1><span class="w">Онлайн</span> <span class="b">шахматы</span></h1>
+    <p class="subtitle">Создай партию и пригласи друга</p>
+    <div class="profile-row">
+      <div class="avatar" id="myAvatar">?</div>
+      <div>
+        <div class="profile-name" id="myName">Игрок</div>
+        <div class="profile-label">Это вы</div>
+      </div>
     </div>
-    <div class="status-text" id="statusText">Ваш ход</div>
+    <button class="action primary" id="createGameBtn">Создать партию</button>
   </div>
 
-  <div class="board-wrap">
-    <div class="board" id="board"></div>
-    <svg class="win-line" id="winLine" viewBox="0 0 340 340"></svg>
+  <!-- ===== WAITING SCREEN ===== -->
+  <div class="screen" id="waitingScreen">
+    <h1><span class="w">Ждём</span> <span class="b">соперника</span></h1>
+    <div class="invite-box">
+      <div class="pulse-dot"></div>
+      <div class="spinner-text">Партия создана. Отправь ссылку другу — игра начнётся, как только он её откроет.</div>
+      <button class="action teal" id="shareLinkBtn">Поделиться ссылкой</button>
+      <button class="action" id="copyLinkBtn">Скопировать ссылку</button>
+    </div>
+    <button class="action" id="cancelWaitBtn">Отменить</button>
   </div>
 
-  <div class="controls">
-    <button class="action primary" id="newGameBtn">Новая игра</button>
-    <button class="action" id="resetScoreBtn">Сбросить счёт</button>
+  <!-- ===== GAME SCREEN ===== -->
+  <div class="screen" id="gameScreen">
+    <div class="status-bar">
+      <div class="status-players">
+        <span><b id="whiteLabel">Белые</b></span>
+        <span><b id="blackLabel">Чёрные</b></span>
+      </div>
+      <div class="status-text" id="gameStatusText">Ход белых</div>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+    </div>
+  </div>
+
+  <!-- ===== RESULT SCREEN ===== -->
+  <div class="screen" id="resultScreen">
+    <div class="result-banner">
+      <div class="headline" id="resultHeadline">Игра окончена</div>
+      <div class="sub" id="resultSub"></div>
+    </div>
+    <button class="action primary" id="newGameAfterBtn">Новая партия</button>
   </div>
 
   <div class="toast" id="toast"></div>
 
 <script>
 (function () {
+  // ===== CONFIG — замени BOT_USERNAME и APP_SHORT_NAME на свои значения =====
+  const SUPABASE_URL = 'https://vwkxwthttgxvjgntsmdo.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3a3h3dGh0dGd4dmpnbnRzbWRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NjIyODIsImV4cCI6MjA5OTUzODI4Mn0.1NFPSMVTRc9RZfNy6f5ZB4rC41vvpNeo6QEGT-rkgkI';
+  const BOT_USERNAME = 'AbsoluteNight_bot';   // TODO: замени на username своего бота (без @)
+  const APP_SHORT_NAME = 'Chess';     // TODO: замени на short name mini app из BotFather (/newapp)
+  // ===========================================================================
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const tg = window.Telegram ? window.Telegram.WebApp : null;
-  if (tg) {
-    tg.ready();
-    tg.expand();
-    tg.setHeaderColor('#0B0D12');
-    tg.setBackgroundColor('#0B0D12');
+  if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#0B0D12'); tg.setBackgroundColor('#0B0D12'); }
+
+  // ---- Текущий пользователь ----
+  let me = { id: 'guest_' + Math.random().toString(36).slice(2, 8), name: 'Гость', photo: null };
+  if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    const u = tg.initDataUnsafe.user;
+    me.id = String(u.id);
+    me.name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'Игрок';
+    me.photo = u.photo_url || null;
   }
 
-  const HUMAN = 'X';
-  const BOT = 'O';
-  const WIN_LINES = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6]
-  ];
+  const PIECE_GLYPHS = { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' };
 
-  let board = Array(9).fill(null);
-  let gameOver = false;
-  let scores = { X: 0, O: 0, D: 0 };
+  let chess = new Chess();
+  let gameId = null;
+  let myColor = null; // 'white' | 'black'
+  let selectedSquare = null;
+  let legalTargets = [];
+  let realtimeChannel = null;
+  let currentRow = null;
 
-  const boardEl = document.getElementById('board');
-  const statusEl = document.getElementById('statusText');
-  const winLineEl = document.getElementById('winLine');
-  const toastEl = document.getElementById('toast');
+  const el = (id) => document.getElementById(id);
 
-  const cellCenters = [
-    [56,56],[170,56],[284,56],
-    [56,170],[170,170],[284,170],
-    [56,284],[170,284],[284,284]
-  ];
-
-  function buildBoard() {
-    boardEl.innerHTML = '';
-    for (let i = 0; i < 9; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      cell.dataset.index = i;
-      cell.addEventListener('click', () => onCellClick(i));
-      boardEl.appendChild(cell);
-    }
-  }
-
-  function markSVG(player) {
-    if (player === HUMAN) {
-      return `<svg viewBox="0 0 100 100">
-        <path class="mark-path mark-x" d="M20,20 L80,80"/>
-        <path class="mark-path mark-x" d="M80,20 L20,80" style="animation-delay:0.05s"/>
-      </svg>`;
-    }
-    return `<svg viewBox="0 0 100 100">
-      <circle class="mark-path mark-o" cx="50" cy="50" r="32"/>
-    </svg>`;
-  }
-
-  function render() {
-    const cells = boardEl.children;
-    for (let i = 0; i < 9; i++) {
-      const cell = cells[i];
-      if (board[i]) {
-        cell.innerHTML = markSVG(board[i]);
-        cell.classList.add('disabled');
-      } else {
-        cell.innerHTML = '';
-        cell.classList.remove('disabled');
-      }
-    }
-  }
-
-  function checkWinner(b) {
-    for (const line of WIN_LINES) {
-      const [a, c, d] = line;
-      if (b[a] && b[a] === b[c] && b[a] === b[d]) {
-        return { winner: b[a], line };
-      }
-    }
-    if (b.every(v => v)) return { winner: 'draw', line: null };
-    return null;
-  }
-
-  function minimax(b, depth, isMaximizing) {
-    const result = checkWinner(b);
-    if (result) {
-      if (result.winner === BOT) return 10 - depth;
-      if (result.winner === HUMAN) return depth - 10;
-      return 0;
-    }
-
-    if (isMaximizing) {
-      let best = -Infinity;
-      for (let i = 0; i < 9; i++) {
-        if (!b[i]) {
-          b[i] = BOT;
-          best = Math.max(best, minimax(b, depth + 1, false));
-          b[i] = null;
-        }
-      }
-      return best;
-    } else {
-      let best = Infinity;
-      for (let i = 0; i < 9; i++) {
-        if (!b[i]) {
-          b[i] = HUMAN;
-          best = Math.min(best, minimax(b, depth + 1, true));
-          b[i] = null;
-        }
-      }
-      return best;
-    }
-  }
-
-  function bestMove() {
-    let bestScore = -Infinity;
-    let move = null;
-    for (let i = 0; i < 9; i++) {
-      if (!board[i]) {
-        board[i] = BOT;
-        const score = minimax(board, 0, false);
-        board[i] = null;
-        if (score > bestScore) {
-          bestScore = score;
-          move = i;
-        }
-      }
-    }
-    return move;
-  }
-
-  function onCellClick(i) {
-    if (gameOver || board[i]) return;
-    board[i] = HUMAN;
-    render();
-
-    const result = checkWinner(board);
-    if (result) {
-      finishGame(result);
-      return;
-    }
-
-    setStatus('Соперник думает…');
-    setBoardLocked(true);
-
-    setTimeout(() => {
-      const move = bestMove();
-      if (move !== null) {
-        board[move] = BOT;
-        render();
-      }
-      const result2 = checkWinner(board);
-      if (result2) {
-        finishGame(result2);
-      } else {
-        setBoardLocked(false);
-        setStatus('Ваш ход');
-      }
-    }, 380);
-  }
-
-  function setBoardLocked(locked) {
-    const cells = boardEl.children;
-    for (let i = 0; i < 9; i++) {
-      if (!board[i]) {
-        cells[i].classList.toggle('disabled', locked);
-      }
-    }
-  }
-
-  function setStatus(text) {
-    statusEl.textContent = text;
-  }
-
-  function drawWinLine(line) {
-    if (!line) return;
-    const [a, , c] = line;
-    const [x1, y1] = cellCenters[a];
-    const [x2, y2] = cellCenters[c];
-    const color = board[a] === HUMAN ? 'var(--x-color)' : 'var(--o-color)';
-    winLineEl.innerHTML = `<path d="M${x1},${y1} L${x2},${y2}" stroke="${color}" style="filter: drop-shadow(0 0 6px ${board[a] === HUMAN ? 'var(--x-glow)' : 'var(--o-glow)'})"/>`;
-  }
-
-  function finishGame(result) {
-    gameOver = true;
-    setBoardLocked(true);
-
-    if (result.winner === 'draw') {
-      scores.D++;
-      setStatus('Ничья');
-      showToast('Ничья! Никто не смог найти брешь.');
-    } else {
-      drawWinLine(result.line);
-      if (result.winner === HUMAN) {
-        scores.X++;
-        setStatus('Вы победили!');
-        showToast('Победа! Такое бывает редко 🎉');
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-      } else {
-        scores.O++;
-        setStatus('Соперник победил');
-        showToast('На этот раз не получилось — попробуйте снова.');
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
-      }
-    }
-    updateScoreboard();
-  }
-
-  function updateScoreboard() {
-    document.getElementById('scoreX').textContent = scores.X;
-    document.getElementById('scoreO').textContent = scores.O;
-    document.getElementById('scoreD').textContent = scores.D;
+  function showScreen(name) {
+    ['homeScreen', 'waitingScreen', 'gameScreen', 'resultScreen'].forEach(s => {
+      el(s).classList.toggle('visible', s === name);
+    });
   }
 
   let toastTimer = null;
   function showToast(text) {
-    toastEl.textContent = text;
-    toastEl.classList.add('show');
+    const t = el('toast');
+    t.textContent = text;
+    t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
-  function newGame() {
-    board = Array(9).fill(null);
-    gameOver = false;
-    winLineEl.innerHTML = '';
-    setStatus('Ваш ход');
-    buildBoard();
-    render();
+  function initials(name) {
+    return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  }
+
+  function renderMyProfile() {
+    el('myName').textContent = me.name;
+    const av = el('myAvatar');
+    if (me.photo) { av.innerHTML = `<img src="${me.photo}" alt="">`; }
+    else { av.textContent = initials(me.name); }
+  }
+
+  // ================= СОЗДАНИЕ / ПРИСОЕДИНЕНИЕ =================
+
+  async function createGame() {
+    const { data, error } = await sb.from('games').insert({
+      status: 'waiting',
+      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      turn: 'white',
+      white_id: me.id,
+      white_name: me.name
+    }).select().single();
+
+    if (error) { showToast('Не удалось создать партию'); console.error(error); return; }
+
+    gameId = data.id;
+    myColor = 'white';
+    currentRow = data;
+    subscribeToGame(gameId);
+    showScreen('waitingScreen');
+  }
+
+  function buildInviteLink() {
+    return `https://t.me/${BOT_USERNAME}/${APP_SHORT_NAME}?startapp=game_${gameId}`;
+  }
+
+  el('shareLinkBtn').addEventListener('click', () => {
+    const link = buildInviteLink();
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Сыграем в шахматы?')}`;
+    if (tg) tg.openTelegramLink(shareUrl);
+    else window.open(shareUrl, '_blank');
+  });
+
+  el('copyLinkBtn').addEventListener('click', async () => {
+    const link = buildInviteLink();
+    try { await navigator.clipboard.writeText(link); showToast('Ссылка скопирована'); }
+    catch (e) { showToast(link); }
+  });
+
+  el('cancelWaitBtn').addEventListener('click', () => {
+    if (realtimeChannel) sb.removeChannel(realtimeChannel);
+    gameId = null; myColor = null; currentRow = null;
+    showScreen('homeScreen');
+  });
+
+  async function joinGameById(id) {
+    const { data, error } = await sb.from('games').select('*').eq('id', id).single();
+    if (error || !data) { showToast('Партия не найдена'); showScreen('homeScreen'); return; }
+
+    if (data.white_id === me.id) {
+      gameId = id; myColor = 'white'; currentRow = data;
+      subscribeToGame(id);
+      if (data.status === 'waiting') showScreen('waitingScreen'); else enterGameScreen(data);
+      return;
+    }
+
+    if (data.black_id === me.id) {
+      gameId = id; myColor = 'black'; currentRow = data;
+      subscribeToGame(id);
+      enterGameScreen(data);
+      return;
+    }
+
+    if (data.status !== 'waiting' || data.black_id) {
+      showToast('Партия уже занята другим игроком');
+      showScreen('homeScreen');
+      return;
+    }
+
+    const { data: updated, error: joinError } = await sb.from('games')
+      .update({ black_id: me.id, black_name: me.name, status: 'active' })
+      .eq('id', id).select().single();
+
+    if (joinError) { showToast('Не удалось присоединиться'); showScreen('homeScreen'); return; }
+
+    gameId = id; myColor = 'black'; currentRow = updated;
+    subscribeToGame(id);
+    enterGameScreen(updated);
+  }
+
+  function subscribeToGame(id) {
+    if (realtimeChannel) sb.removeChannel(realtimeChannel);
+    realtimeChannel = sb.channel('game-' + id)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${id}` },
+        (payload) => onGameRowChanged(payload.new))
+      .subscribe();
+  }
+
+  function onGameRowChanged(row) {
+    currentRow = row;
+    if (row.status === 'active' && el('waitingScreen').classList.contains('visible')) {
+      showToast(row.black_name + ' присоединился(-ась)!');
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      enterGameScreen(row);
+      return;
+    }
+    if (row.status === 'finished') {
+      chess.load(row.fen);
+      showResult(row);
+      return;
+    }
+    if (el('gameScreen').classList.contains('visible')) {
+      chess.load(row.fen);
+      selectedSquare = null; legalTargets = [];
+      renderBoard();
+      updateStatusBar();
+    }
+  }
+
+  // ================= ЭКРАН ИГРЫ =================
+
+  function enterGameScreen(row) {
+    chess.load(row.fen);
+    el('whiteLabel').textContent = '♔ ' + (row.white_name || '—') + (myColor === 'white' ? ' (вы)' : '');
+    el('blackLabel').textContent = '♚ ' + (row.black_name || '—') + (myColor === 'black' ? ' (вы)' : '');
+    buildBoardDom();
+    renderBoard();
+    updateStatusBar();
+    showScreen('gameScreen');
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
   }
 
-  document.getElementById('newGameBtn').addEventListener('click', newGame);
-  document.getElementById('resetScoreBtn').addEventListener('click', () => {
-    scores = { X: 0, O: 0, D: 0 };
-    updateScoreboard();
-    showToast('Счёт сброшен');
+  function updateStatusBar() {
+    const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+    const isMyTurn = turnColor === myColor;
+    let text = isMyTurn ? 'Ваш ход' : 'Ход соперника';
+    if (chess.in_check()) text += ' · Шах!';
+    el('gameStatusText').textContent = text;
+  }
+
+  const FILES = ['a','b','c','d','e','f','g','h'];
+
+  function buildBoardDom() {
+    const boardEl = el('board');
+    boardEl.innerHTML = '';
+    boardEl.classList.toggle('flipped', myColor === 'black');
+    for (let rank = 8; rank >= 1; rank--) {
+      for (let fi = 0; fi < 8; fi++) {
+        const square = FILES[fi] + rank;
+        const cell = document.createElement('div');
+        cell.className = 'square ' + (((fi + rank) % 2 === 0) ? 'dark' : 'light');
+        cell.dataset.square = square;
+        cell.addEventListener('click', () => onSquareClick(square));
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  function renderBoard() {
+    const cells = document.querySelectorAll('#board .square');
+    const boardState = chess.board(); // [8][8], row0 = rank8
+    cells.forEach(cell => {
+      const square = cell.dataset.square;
+      const file = FILES.indexOf(square[0]);
+      const rank = parseInt(square[1], 10);
+      const piece = boardState[8 - rank][file];
+      cell.innerHTML = '';
+      cell.classList.toggle('selected', square === selectedSquare);
+      if (piece) {
+        const span = document.createElement('span');
+        span.className = 'piece ' + (piece.color === 'w' ? 'white' : 'black');
+        span.textContent = PIECE_GLYPHS[piece.type];
+        cell.appendChild(span);
+      }
+      const target = legalTargets.find(m => m.to === square);
+      if (target) {
+        const marker = document.createElement('div');
+        marker.className = target.captured ? 'ring' : 'dot';
+        cell.appendChild(marker);
+      }
+    });
+  }
+
+  async function onSquareClick(square) {
+    if (!currentRow || currentRow.status !== 'active') return;
+    const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+    if (turnColor !== myColor) return;
+
+    const target = legalTargets.find(m => m.to === square);
+    if (selectedSquare && target) {
+      const move = chess.move({ from: selectedSquare, to: square, promotion: 'q' });
+      selectedSquare = null; legalTargets = [];
+      if (move) { renderBoard(); await pushMove(); }
+      return;
+    }
+
+    const piece = chess.get(square);
+    if (piece && ((piece.color === 'w' && myColor === 'white') || (piece.color === 'b' && myColor === 'black'))) {
+      selectedSquare = square;
+      legalTargets = chess.moves({ square, verbose: true });
+      renderBoard();
+    } else {
+      selectedSquare = null; legalTargets = [];
+      renderBoard();
+    }
+  }
+
+  async function pushMove() {
+    const update = { fen: chess.fen(), turn: chess.turn() === 'w' ? 'white' : 'black' };
+
+    if (chess.game_over()) {
+      update.status = 'finished';
+      update.result = chess.in_checkmate() ? (chess.turn() === 'w' ? 'black_win' : 'white_win') : 'draw';
+    }
+
+    const { data, error } = await sb.from('games').update(update).eq('id', gameId).select().single();
+    if (error) { showToast('Ошибка синхронизации хода'); console.error(error); return; }
+    currentRow = data;
+    if (data.status === 'finished') { showResult(data); } else { updateStatusBar(); }
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+  }
+
+  function showResult(row) {
+    let headline, sub;
+    if (row.result === 'draw') {
+      headline = 'Ничья';
+      sub = chess.in_stalemate() ? 'Пат — ни у кого нет ходов' : 'Партия завершилась вничью';
+    } else {
+      const iWon = row.result === (myColor === 'white' ? 'white_win' : 'black_win');
+      headline = iWon ? 'Вы победили! 🎉' : 'Соперник победил';
+      sub = 'Мат на доске';
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(iWon ? 'success' : 'error');
+    }
+    el('resultHeadline').textContent = headline;
+    el('resultSub').textContent = sub;
+    showScreen('resultScreen');
+  }
+
+  el('newGameAfterBtn').addEventListener('click', () => {
+    if (realtimeChannel) sb.removeChannel(realtimeChannel);
+    gameId = null; myColor = null; currentRow = null; selectedSquare = null; legalTargets = [];
+    chess = new Chess();
+    showScreen('homeScreen');
   });
 
-  buildBoard();
-  render();
+  el('createGameBtn').addEventListener('click', createGame);
+
+  // ================= СТАРТ =================
+  renderMyProfile();
+
+  const startParam = tg && tg.initDataUnsafe ? tg.initDataUnsafe.start_param : null;
+  if (startParam && startParam.startsWith('game_')) {
+    joinGameById(startParam.replace('game_', ''));
+  } else {
+    showScreen('homeScreen');
+  }
 })();
 </script>
 </body>
