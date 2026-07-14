@@ -180,6 +180,46 @@
   }
   .result-banner .sub { font-size: 13px; color: var(--muted); }
 
+  .link-btn {
+    background: none; border: none; color: var(--accent-teal);
+    font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 0;
+  }
+
+  .back-btn {
+    background: none; border: none; color: var(--muted);
+    font-size: 14px; cursor: pointer; padding: 4px 0;
+  }
+  .profile-header-row { width: 100%; margin-bottom: 8px; }
+
+  .avatar.large { width: 56px; height: 56px; font-size: 20px; }
+
+  .stats-row { width: 100%; display: flex; gap: 10px; margin: 16px 0 20px; }
+  .stat-box {
+    flex: 1; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 14px 8px; text-align: center;
+  }
+  .stat-num { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .history-label {
+    width: 100%; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px;
+  }
+  .history-list {
+    width: 100%; display: flex; flex-direction: column; gap: 8px;
+    max-height: 55vh; overflow-y: auto;
+  }
+  .history-item {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .history-item .opp { font-size: 13px; font-weight: 600; }
+  .history-item .date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .history-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 8px; white-space: nowrap; }
+  .history-badge.win { background: rgba(34,211,184,0.15); color: var(--accent-teal); }
+  .history-badge.loss { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .history-badge.draw { background: rgba(139,147,167,0.15); color: var(--muted); }
+  .history-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
     background: var(--surface); border: 1px solid var(--line); color: var(--text);
@@ -204,6 +244,7 @@
       </div>
     </div>
     <button class="action primary" id="createGameBtn">Создать партию</button>
+    <button class="link-btn" id="openProfileBtn">Профиль и статистика →</button>
   </div>
 
   <!-- ===== WAITING SCREEN ===== -->
@@ -237,6 +278,27 @@
     <button class="action danger" id="resignBtn">Сдаться</button>
   </div>
 
+  <!-- ===== PROFILE SCREEN ===== -->
+  <div class="screen" id="profileScreen">
+    <div class="profile-header-row">
+      <button class="back-btn" id="profileBackBtn">← Назад</button>
+    </div>
+    <div class="profile-row">
+      <div class="avatar large" id="profileAvatar">?</div>
+      <div>
+        <div class="profile-name" id="profileName">Игрок</div>
+        <div class="profile-label">Ваш профиль</div>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num" id="statWins">0</div><div class="stat-label">Победы</div></div>
+      <div class="stat-box"><div class="stat-num" id="statLosses">0</div><div class="stat-label">Поражения</div></div>
+      <div class="stat-box"><div class="stat-num" id="statDraws">0</div><div class="stat-label">Ничьи</div></div>
+    </div>
+    <div class="history-label">История партий</div>
+    <div class="history-list" id="historyList"><div class="history-empty">Загрузка…</div></div>
+  </div>
+
   <!-- ===== RESULT SCREEN ===== -->
   <div class="screen" id="resultScreen">
     <div class="result-banner">
@@ -256,7 +318,7 @@
   const BOT_USERNAME = 'AbsoluteNight_bot';   // TODO: замени на username своего бота (без @)
   const APP_SHORT_NAME = 'Chess';     // TODO: замени на short name mini app из BotFather (/newapp)
   // ===========================================================================
-
+  
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const tg = window.Telegram ? window.Telegram.WebApp : null;
@@ -290,7 +352,7 @@
   const el = (id) => document.getElementById(id);
 
   function showScreen(name) {
-    ['homeScreen', 'waitingScreen', 'gameScreen', 'resultScreen'].forEach(s => {
+    ['homeScreen', 'waitingScreen', 'gameScreen', 'resultScreen', 'profileScreen'].forEach(s => {
       el(s).classList.toggle('visible', s === name);
     });
   }
@@ -314,6 +376,75 @@
     if (me.photo) { av.innerHTML = `<img src="${me.photo}" alt="">`; }
     else { av.textContent = initials(me.name); }
   }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' · ' +
+           d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function loadProfile() {
+    el('profileName').textContent = me.name;
+    const av = el('profileAvatar');
+    if (me.photo) { av.innerHTML = `<img src="${me.photo}" alt="">`; }
+    else { av.textContent = initials(me.name); }
+
+    el('historyList').innerHTML = '<div class="history-empty">Загрузка…</div>';
+
+    const { data, error } = await sb.from('games')
+      .select('*')
+      .or(`white_id.eq.${me.id},black_id.eq.${me.id}`)
+      .eq('status', 'finished')
+      .order('finished_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      el('historyList').innerHTML = '<div class="history-empty">Не удалось загрузить историю</div>';
+      console.error(error);
+      return;
+    }
+
+    let wins = 0, losses = 0, draws = 0;
+    const badgeLabel = { win: 'Победа', loss: 'Поражение', draw: 'Ничья' };
+
+    const items = (data || []).map(g => {
+      const iAmWhite = g.white_id === me.id;
+      const myRes = g.result === 'draw' ? 'draw' : (g.result === (iAmWhite ? 'white_win' : 'black_win') ? 'win' : 'loss');
+      if (myRes === 'win') wins++; else if (myRes === 'loss') losses++; else draws++;
+      const oppName = iAmWhite ? (g.black_name || 'Соперник') : (g.white_name || 'Соперник');
+      return { oppName, myRes, when: g.finished_at || g.created_at };
+    });
+
+    el('statWins').textContent = wins;
+    el('statLosses').textContent = losses;
+    el('statDraws').textContent = draws;
+
+    if (!items.length) {
+      el('historyList').innerHTML = '<div class="history-empty">Партий пока нет</div>';
+      return;
+    }
+
+    el('historyList').innerHTML = items.map(it => `
+      <div class="history-item">
+        <div>
+          <div class="opp">${escapeHtml(it.oppName)}</div>
+          <div class="date">${formatDate(it.when)}</div>
+        </div>
+        <div class="history-badge ${it.myRes}">${badgeLabel[it.myRes]}</div>
+      </div>
+    `).join('');
+  }
+
+  el('openProfileBtn').addEventListener('click', () => {
+    showScreen('profileScreen');
+    loadProfile();
+  });
+
+  el('profileBackBtn').addEventListener('click', () => showScreen('homeScreen'));
 
   // ================= СОЗДАНИЕ / ПРИСОЕДИНЕНИЕ =================
 
@@ -474,7 +605,7 @@
   async function forfeitByDisconnect() {
     const result = myColor === 'white' ? 'white_win' : 'black_win';
     const { data, error } = await sb.from('games')
-      .update({ status: 'finished', result, end_reason: 'opponent_left' })
+      .update({ status: 'finished', result, end_reason: 'opponent_left', finished_at: new Date().toISOString() })
       .eq('id', gameId).eq('status', 'active').select().single();
     if (!error && data) { currentRow = data; stopLeaveCountdown(); showResult(data); }
   }
@@ -636,6 +767,7 @@
 
     if (chess.game_over()) {
       update.status = 'finished';
+      update.finished_at = new Date().toISOString();
       if (chess.in_checkmate()) {
         update.result = chess.turn() === 'w' ? 'black_win' : 'white_win';
         update.end_reason = 'checkmate';
@@ -691,7 +823,7 @@
   async function resignGame() {
     const result = myColor === 'white' ? 'black_win' : 'white_win';
     const { data, error } = await sb.from('games')
-      .update({ status: 'finished', result, end_reason: 'resignation' })
+      .update({ status: 'finished', result, end_reason: 'resignation', finished_at: new Date().toISOString() })
       .eq('id', gameId).select().single();
     if (error) { showToast('Не удалось сдаться, попробуйте ещё раз'); return; }
     currentRow = data;
