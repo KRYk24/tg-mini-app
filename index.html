@@ -163,6 +163,14 @@
   }
   button.action.danger:active { background: rgba(255,107,107,0.1); }
 
+  .leave-banner {
+    display: none;
+    width: 100%; background: rgba(255, 107, 107, 0.1); border: 1px solid var(--danger);
+    color: var(--danger); border-radius: 12px; padding: 10px 14px;
+    font-size: 13px; text-align: center; margin-bottom: 12px;
+  }
+  .leave-banner.visible { display: block; }
+
   .result-banner {
     width: 100%; background: var(--surface); border: 1px solid var(--line);
     border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 14px;
@@ -212,6 +220,9 @@
 
   <!-- ===== GAME SCREEN ===== -->
   <div class="screen" id="gameScreen">
+    <div class="leave-banner" id="leaveBanner">
+      Соперник вышел — партия завершится через <b id="leaveTimer">5:00</b>
+    </div>
     <div class="status-bar">
       <div class="status-players">
         <span><b id="whiteLabel">Белые</b></span>
@@ -274,6 +285,7 @@
   let legalTargets = [];
   let realtimeChannel = null;
   let currentRow = null;
+  let leaveTimerInterval = null;
 
   const el = (id) => document.getElementById(id);
 
@@ -381,12 +393,90 @@
     enterGameScreen(updated);
   }
 
+  function getOpponentColor() { return myColor === 'white' ? 'black' : 'white'; }
+  function getOpponentId(row) { return myColor === 'white' ? row.black_id : row.white_id; }
+
   function subscribeToGame(id) {
     if (realtimeChannel) sb.removeChannel(realtimeChannel);
-    realtimeChannel = sb.channel('game-' + id)
+    realtimeChannel = sb.channel('game-' + id, { config: { presence: { key: me.id } } })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${id}` },
         (payload) => onGameRowChanged(payload.new))
-      .subscribe();
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        if (!currentRow || currentRow.status !== 'active') return;
+        const oppId = getOpponentId(currentRow);
+        if (leftPresences.some(p => p.id === oppId)) markOpponentLeft();
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        if (!currentRow) return;
+        const oppId = getOpponentId(currentRow);
+        if (newPresences.some(p => p.id === oppId) && currentRow.left_by === getOpponentColor()) {
+          clearOpponentLeft();
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await realtimeChannel.track({ id: me.id, color: myColor });
+        }
+      });
+  }
+
+  async function markOpponentLeft() {
+    if (currentRow.left_by === getOpponentColor()) return;
+    const { data, error } = await sb.from('games')
+      .update({ left_by: getOpponentColor(), left_at: new Date().toISOString() })
+      .eq('id', gameId).eq('status', 'active').select().single();
+    if (!error && data) { currentRow = data; syncLeaveState(data); }
+  }
+
+  async function clearOpponentLeft() {
+    const { data, error } = await sb.from('games')
+      .update({ left_by: null, left_at: null })
+      .eq('id', gameId).select().single();
+    if (!error && data) { currentRow = data; syncLeaveState(data); }
+  }
+
+  function syncLeaveState(row) {
+    if (row.status !== 'active' || row.left_by !== getOpponentColor() || !row.left_at) {
+      stopLeaveCountdown();
+      return;
+    }
+    startLeaveCountdown(row.left_at);
+  }
+
+  function startLeaveCountdown(leftAtIso) {
+    const deadline = new Date(leftAtIso).getTime() + 5 * 60 * 1000;
+    el('leaveBanner').classList.add('visible');
+    clearInterval(leaveTimerInterval);
+
+    const tick = async () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        clearInterval(leaveTimerInterval);
+        leaveTimerInterval = null;
+        await forfeitByDisconnect();
+        return;
+      }
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      el('leaveTimer').textContent = mins + ':' + String(secs).padStart(2, '0');
+    };
+
+    tick();
+    leaveTimerInterval = setInterval(tick, 1000);
+  }
+
+  function stopLeaveCountdown() {
+    clearInterval(leaveTimerInterval);
+    leaveTimerInterval = null;
+    el('leaveBanner').classList.remove('visible');
+  }
+
+  async function forfeitByDisconnect() {
+    const result = myColor === 'white' ? 'white_win' : 'black_win';
+    const { data, error } = await sb.from('games')
+      .update({ status: 'finished', result, end_reason: 'opponent_left' })
+      .eq('id', gameId).eq('status', 'active').select().single();
+    if (!error && data) { currentRow = data; stopLeaveCountdown(); showResult(data); }
   }
 
   function onGameRowChanged(row) {
@@ -411,6 +501,7 @@
       renderLastMoveHighlight(row);
       renderMovesPanel(row);
       updateStatusBar();
+      syncLeaveState(row);
     }
   }
 
@@ -425,6 +516,7 @@
     renderLastMoveHighlight(row);
     renderMovesPanel(row);
     updateStatusBar();
+    syncLeaveState(row);
     showScreen('gameScreen');
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
   }
@@ -537,7 +629,9 @@
       turn: chess.turn() === 'w' ? 'white' : 'black',
       moves: (currentRow.moves || []).concat(move.san),
       last_from: move.from,
-      last_to: move.to
+      last_to: move.to,
+      left_by: null,
+      left_at: null
     };
 
     if (chess.game_over()) {
@@ -559,6 +653,7 @@
     currentRow = data;
     renderMovesPanel(data);
     renderLastMoveHighlight(data);
+    stopLeaveCountdown();
     if (data.status === 'finished') { showResult(data); } else { updateStatusBar(); }
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
   }
@@ -578,7 +673,9 @@
     } else {
       const iWon = row.result === (myColor === 'white' ? 'white_win' : 'black_win');
       headline = iWon ? 'Вы победили! 🎉' : 'Соперник победил';
-      sub = row.end_reason === 'resignation' ? (iWon ? 'Соперник сдался' : 'Вы сдались') : 'Мат на доске';
+      sub = row.end_reason === 'resignation' ? (iWon ? 'Соперник сдался' : 'Вы сдались')
+        : row.end_reason === 'opponent_left' ? (iWon ? 'Соперник вышел и не вернулся' : 'Вы не успели вернуться вовремя')
+        : 'Мат на доске';
       if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(iWon ? 'success' : 'error');
     }
     el('resultHeadline').textContent = headline;
@@ -610,6 +707,7 @@
 
   el('newGameAfterBtn').addEventListener('click', () => {
     if (realtimeChannel) sb.removeChannel(realtimeChannel);
+    stopLeaveCountdown();
     gameId = null; myColor = null; currentRow = null; selectedSquare = null; legalTargets = [];
     chess = new Chess();
     showScreen('homeScreen');
